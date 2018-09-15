@@ -9,6 +9,8 @@ String pomRepositoryUrl = 'https://github.com/laurencecao/karma'
 String pomScmUrl = 'https://github.com/laurencecao/karma'
 String pomDeveloperEmail = 'laurence.cao@gmail.com'
 String pomDeveloperName = 'Laurence Cao'
+String pomLicenseName = 'The Apache Software License, Version 2.0'
+String pomLicenseUrl = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
 
 task sourcesJar(type: Jar) {
     classifier = 'sources'
@@ -52,6 +54,13 @@ uploadArchives {
                 scm {
                     connection pomScmUrl
                     url pomScmUrl
+                }
+                licenses {
+                    license {
+                        name pomLicenseName
+                        url pomLicenseUrl
+                        distribution 'repo'
+                    }
                 }
                 developers {
                     developer {
