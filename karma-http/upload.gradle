@@ -1,0 +1,65 @@
+apply plugin: 'maven'
+
+version = '1.0'
+String group = 'com.github.laurencecao'
+
+String pomName = 'karma-http'
+String pomDescription = 'Java RPC Framework - HTTP'
+String pomRepositoryUrl = 'https://github.com/laurencecao/karma'
+String pomScmUrl = 'https://github.com/laurencecao/karma'
+String pomDeveloperEmail = 'laurence.cao@gmail.com'
+String pomDeveloperName = 'Laurence Cao'
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives jar, javadocJar, sourcesJar
+}
+
+def getSonatypeProperty(String name) {
+    name = 'sonatype' + name.capitalize()
+    if (project.hasProperty(name)) {
+        return project.getProperties()[name]
+    } else {
+        return ''
+    }
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: getSonatypeProperty('username'), password: getSonatypeProperty('password'))
+            }
+
+            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: getSonatypeProperty('username'), password: getSonatypeProperty('password'))
+            }
+
+            pom.project {
+                name pomName
+                description pomDescription
+                url pomRepositoryUrl
+                version version
+                groupId group
+                artifactId pomName
+                packaging 'jar'
+                scm {
+                    connection pomScmUrl
+                    url pomScmUrl
+                }
+                developers {
+                    developer {
+                        name pomDeveloperName
+                        email pomDeveloperEmail
+                    }
+                }
+            }
+        }
+     }
+    }

@@ -1,79 +1,131 @@
-apply plugin: 'maven'
+apply plugin: 'java'
+apply plugin: 'maven-publish'
 apply plugin: 'signing'
 
-version = '1.0'
-String group = 'com.github.laurencecao'
-
-
-String pomName = 'karma-cluster'
-String pomDescription = 'RPC Framework - Cluster'
-String pomRepositoryUrl = 'https://github.com/laurencecao/karma'
-String pomScmUrl = 'https://github.com/laurencecao/librepo'
-String pomDeveloperId = 'laurencecao'
-String pomDeveloperEmail = 'laurence.cao@gmail.com'
-String pomDeveloperName = 'Laurence Cao'
-
-task javadocJar(type: Jar) {
-    classifier = 'javadoc'
-    from javadoc
+repositories {
+    mavenCentral()
 }
 
-task sourcesJar(type: Jar) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
+task sourceJar(type: Jar) {
+    classifier "sources"
+    from sourceSets.main.allJava
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier "javadoc"
+    from javadoc.destinationDir
 }
 
 artifacts {
-    archives jar, javadocJar, sourcesJar
+    archives jar
+    archives sourceJar
+    archives javadocJar
 }
 
 signing {
     sign configurations.archives
 }
 
-def getSonatypeProperty(String name) {
-    name = 'sonatype' + name.capitalize()
-    if (project.hasProperty(name)) {
-        return project.getProperties()[name]
-    } else {
-        return ''
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            customizePom(pom)
+            groupId 'com.github.laurencecao'
+            artifactId 'karma-cluster'
+            version '1.0'
+
+            from components.java
+
+            // create the sign pom artifact
+            pom.withXml {
+                def pomFile = file("${project.buildDir}/generated-pom.xml")
+                writeTo(pomFile)
+                def pomAscFile = signing.sign(pomFile).signatureFiles[0]
+                artifact(pomAscFile) {
+                    classifier = null
+                    extension = 'pom.asc'
+                }
+            }
+
+            artifact(sourceJar) {
+                classifier = 'sources'
+            }
+            artifact(javadocJar) {
+                classifier = 'javadoc'
+            }
+
+            // create the signed artifacts
+            project.tasks.signArchives.signatureFiles.each {
+                artifact(it) {
+                    def matcher = it.file =~ /-(sources|javadoc)\.jar\.asc$/
+                    if (matcher.find()) {
+                        classifier = matcher.group(1)
+                    } else {
+                        classifier = null
+                    }
+                    extension = 'jar.asc'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            url "https://oss.sonatype.org/service/local/staging/deploy/maven2"
+            credentials {
+                username sonatypeUsername
+                password sonatypePassword
+            }
+        }
     }
 }
 
-uploadArchives {
-    repositories {
-        mavenDeployer {
-            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+def customizePom(pom) {
+    pom.withXml {
+        def root = asNode()
 
-            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
-                authentication(userName: getSonatypeProperty('username'), password: getSonatypeProperty('password'))
+        // eliminate test-scoped dependencies (no need in maven central POMs)
+        root.dependencies.removeAll { dep ->
+            dep.scope == "test"
+        }
+
+        // add all items necessary for maven central publication
+        root.children().last() + {
+            resolveStrategy = Closure.DELEGATE_FIRST
+
+            description 'Java RPC Framework - Cluster'
+            name 'karma-cluster'
+            url 'https://github.com/laurencecao/karma'
+            organization {
+                name 'com.github.laurencecao'
+                url 'https://github.com/laurencecao'
             }
-
-            snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
-                authentication(userName: getSonatypeProperty('username'), password: getSonatypeProperty('password'))
+            issueManagement {
+                system 'GitHub'
+                url 'https://github.com/laurencecao/karma/issues'
             }
-
-            pom.project {
-                name pomName
-                description pomDescription
-                url pomRepositoryUrl
-                version version
-                groupId group
-                artifactId pomName
-                packaging 'jar'
-                scm {
-                    connection pomScmUrl
-                    developerConnection pomScmUrl
-                    url pomScmUrl
+            scm {
+                url 'https://github.com/laurencecao/karma'
+                connection 'scm:git:git://github.com/laurencecao/karma.git'
+                developerConnection 'scm:git:ssh://git@github.com:laurencecao/karma.git'
+            }
+            developers {
+                developer {
+                    name 'Laurence Cao'
+                    email 'laurence.cao@gmail.com'
                 }
-                developers {
-                    developer {
-                        id pomDeveloperId
-                        name pomDeveloperName
-                        email pomDeveloperEmail
-                    }
-                }
             }
-          } 
         }
     }
+}
+
+model {
+    tasks.generatePomFileForMavenJavaPublication {
+        destination = file("$buildDir/generated-pom.xml")
+    }
+    tasks.publishMavenJavaPublicationToMavenLocal {
+        dependsOn project.tasks.signArchives
+    }
+    tasks.publishMavenJavaPublicationToMavenRepository {
+        dependsOn project.tasks.signArchives
+    }
+}
